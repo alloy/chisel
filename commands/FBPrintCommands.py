@@ -266,13 +266,17 @@ class FBPrintInstanceVariable(fb.FBCommand):
     commandForObject, ivarName = arguments
 
     object = fb.evaluateObjectExpression(commandForObject)
-    objectClass = fb.evaluateExpressionValue('(id)[(' + object + ') class]').GetObjectDescription()
 
-    ivarTypeCommand = '((char *)ivar_getTypeEncoding((void*)object_getInstanceVariable((id){}, \"{}\", 0)))[0]'.format(object, ivarName)
+    valueVariableName = '$fblldb_{}_value'.format(ivarName)
+    fb.evaluateExpression('void *{} = NULL'.format(valueVariableName), False)
+
+    ivarTypeCommand = '((char *)ivar_getTypeEncoding((void *)object_getInstanceVariable((id){}, \"{}\", &{})))[0]'.format(object, ivarName, valueVariableName)
     ivarTypeEncodingFirstChar = fb.evaluateExpression(ivarTypeCommand)
 
     printCommand = 'po' if ('@' in ivarTypeEncodingFirstChar) else 'p'
-    lldb.debugger.HandleCommand('{} (({} *)({}))->{}'.format(printCommand, objectClass, object, ivarName))
+    lldb.debugger.HandleCommand('{} {}'.format(printCommand, valueVariableName))
+
+    fb.evaluateExpressionValue('{} = NULL'.format(valueVariableName))
 
 class FBPrintKeyPath(fb.FBCommand):
   def name(self):
