@@ -28,6 +28,7 @@ def lldbcommands():
     FBPrintOnscreenTableViewCells(),
     FBPrintInternals(),
     FBPrintInstanceVariable(),
+    FBPrintInstanceVariables(),
     FBPrintKeyPath(),
   ]
 
@@ -268,7 +269,7 @@ class FBPrintInstanceVariable(fb.FBCommand):
     object = fb.evaluateObjectExpression(commandForObject)
 
     valueVariableName = '$fblldb_{}_value'.format(ivarName)
-    fb.evaluateExpression('void *{} = NULL'.format(valueVariableName), False)
+    fb.evaluateExpressionValue('void *{} = NULL'.format(valueVariableName), False)
 
     ivarTypeCommand = '((char *)ivar_getTypeEncoding((void *)object_getInstanceVariable((id){}, \"{}\", &{})))[0]'.format(object, ivarName, valueVariableName)
     ivarTypeEncodingFirstChar = fb.evaluateExpression(ivarTypeCommand)
@@ -277,6 +278,31 @@ class FBPrintInstanceVariable(fb.FBCommand):
     lldb.debugger.HandleCommand('{} {}'.format(printCommand, valueVariableName))
 
     fb.evaluateExpressionValue('{} = NULL'.format(valueVariableName))
+
+class FBPrintInstanceVariables(fb.FBCommand):
+  def name(self):
+    return 'pivars'
+
+  def description(self):
+    return "Print the instance variables of an object."
+
+  def args(self):
+    return [
+      fb.FBCommandArgument(arg='object', type='id', help='Object expression to be evaluated.')
+    ]
+
+  def run(self, arguments, options):
+    commandForObject = arguments[0]
+    object = fb.evaluateObjectExpression(commandForObject)
+    fb.evaluateExpressionValue('unsigned int $fblldb_ivar_count = 0', False)
+    fb.evaluateExpressionValue('intptr_t *$fblldb_ivars = (intptr_t *)class_copyIvarList((Class)object_getClass({}), &$fblldb_ivar_count)'.format(object), False)
+    ivarCount = int(fb.evaluateExpression('$fblldb_ivar_count'))
+
+    for i in range(0, ivarCount):
+      # TODO Unsure how to easily read the string properly, so just getting a summary and removing the quotes.
+      ivarName = fb.evaluateExpressionValue('(char *)ivar_getName((void *)$fblldb_ivars[{}])'.format(i)).GetSummary()[1:-1]
+      print '{} -> '.format(ivarName),
+      FBPrintInstanceVariable().run([commandForObject, ivarName], options)
 
 class FBPrintKeyPath(fb.FBCommand):
   def name(self):
